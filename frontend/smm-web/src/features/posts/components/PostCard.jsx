@@ -1,98 +1,146 @@
 import {
-    Avatar,
-    Box,
-    Divider,
-    IconButton,
-    Paper,
-    Typography,
-  } from "@mui/material";
+  Avatar,
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  IconButton,
+  Menu,
+  MenuItem,
+  Paper,
+  TextField,
+  Typography,
+} from "@mui/material";
   
-  import MoreHorizRoundedIcon from "@mui/icons-material/MoreHorizRounded";
-  import FavoriteRoundedIcon from "@mui/icons-material/FavoriteRounded";
-  import FavoriteBorderRoundedIcon from "@mui/icons-material/FavoriteBorderRounded";
-  import ChatBubbleOutlineRoundedIcon from "@mui/icons-material/ChatBubbleOutlineRounded";
-  import ShareOutlinedIcon from "@mui/icons-material/ShareOutlined";
-  import PublicRoundedIcon from "@mui/icons-material/PublicRounded";
+import MoreHorizRoundedIcon from "@mui/icons-material/MoreHorizRounded";
+import FavoriteRoundedIcon from "@mui/icons-material/FavoriteRounded";
+import FavoriteBorderRoundedIcon from "@mui/icons-material/FavoriteBorderRounded";
+import ChatBubbleOutlineRoundedIcon from "@mui/icons-material/ChatBubbleOutlineRounded";
+import ShareOutlinedIcon from "@mui/icons-material/ShareOutlined";
+import PublicRoundedIcon from "@mui/icons-material/PublicRounded";
   
-  import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
   
-  import { likePost, unlikePost } from "../api/postsApi";
+  import {
+  likePost,
+  unlikePost,
+  updatePost,
+  deletePost,
+} from "../api/postsApi";
   
-  import { API_ORIGIN } from "../../../config";
+import { API_ORIGIN } from "../../../config";
   
-  import { useState } from "react";
-  import CommentSection from "../../comments/components/CommentSection";
+import { useState } from "react";
+import CommentSection from "../../comments/components/CommentSection";
   
-  export default function PostCard({ post }) {
-    const [showComments, setShowComments] = useState(false);
-    const queryClient = useQueryClient();
+export default function PostCard({ post }) {
+  const [showComments, setShowComments] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editContent, setEditContent] = useState(
+    post.content || ""
+  );
+
+  const queryClient = useQueryClient();
   
-    const imageUrl = post.imageUrl ? `${API_ORIGIN}${post.imageUrl}` : null;
+  const imageUrl = post.imageUrl ? `${API_ORIGIN}${post.imageUrl}` : null;
   
-    const videoUrl = post.videoUrl ? `${API_ORIGIN}${post.videoUrl}` : null;
+  const videoUrl = post.videoUrl ? `${API_ORIGIN}${post.videoUrl}` : null;
   
-    const profileImageUrl = post.profileImageUrl
+  const profileImageUrl = post.profileImageUrl
       ? post.profileImageUrl.startsWith("http")
         ? post.profileImageUrl
         : `${API_ORIGIN}${post.profileImageUrl}`
       : null;
   
-    const likeMutation = useMutation({
-      mutationFn: () =>
-        post.isLikedByCurrentUser ? unlikePost(post.id) : likePost(post.id),
-  
-      onMutate: async () => {
-        await queryClient.cancelQueries({
-          queryKey: ["posts"],
-        });
-  
-        const previousData = queryClient.getQueryData(["posts"]);
-  
-        queryClient.setQueryData(["posts"], (oldData) => {
-          if (!oldData) {
-            return oldData;
-          }
-  
-          return {
-            ...oldData,
-  
-            items: oldData.items.map((item) => {
-              if (item.id !== post.id) {
-                return item;
-              }
-  
-              const currentlyLiked = item.isLikedByCurrentUser;
-  
-              return {
-                ...item,
-  
-                isLikedByCurrentUser: !currentlyLiked,
-  
-                likeCount: item.likeCount + (currentlyLiked ? -1 : 1),
-              };
-            }),
-          };
-        });
-  
-        return {
-          previousData,
-        };
-      },
-  
-      onError: (_error, _variables, context) => {
-        if (context?.previousData) {
-          queryClient.setQueryData(["posts"], context.previousData);
+  const likeMutation = useMutation({
+    mutationFn: () =>
+      post.isLikedByCurrentUser
+        ? unlikePost(post.id)
+        : likePost(post.id),
+
+    onMutate: async () => {
+      await queryClient.cancelQueries({
+        queryKey: ["posts"],
+      });
+
+      const previousData = queryClient.getQueryData(["posts"]);
+
+      queryClient.setQueryData(["posts"], (oldData) => {
+        if (!oldData) {
+          return oldData;
         }
-      },
-  
-      onSettled: () => {
-        queryClient.invalidateQueries({
-          queryKey: ["posts"],
-        });
-      },
-    });
-  
-    function handleLike() {
+
+        return {
+          ...oldData,
+          items: oldData.items.map((item) => {
+            if (item.id !== post.id) {
+              return item;
+            }
+
+            const currentlyLiked = item.isLikedByCurrentUser;
+
+            return {
+              ...item,
+              isLikedByCurrentUser: !currentlyLiked,
+              likeCount:
+                item.likeCount + (currentlyLiked ? -1 : 1),
+            };
+          }),
+        };
+      });
+
+      return {
+        previousData,
+      };
+    },
+
+    onError: (_error, _variables, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(
+          ["posts"],
+          context.previousData
+        );
+      }
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["posts"],
+      });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: () =>
+      updatePost({
+        postId: post.id,
+        content: editContent,
+      }),
+
+    onSuccess: () => {
+      setEditOpen(false);
+
+      queryClient.invalidateQueries({
+        queryKey: ["posts"],
+      });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deletePost(post.id),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["posts"],
+      });
+    },
+  });
+
+  function handleLike() {
       if (likeMutation.isPending) {
         return;
       }
@@ -100,7 +148,7 @@ import {
       likeMutation.mutate();
     }
   
-    function formatPostDate(date) {
+  function formatPostDate(date) {
       if (!date) {
         return "";
       }
@@ -138,7 +186,7 @@ import {
       return postDate.toLocaleDateString();
     }
   
-    return (
+  return (
       <Paper
         elevation={0}
         sx={{
@@ -161,9 +209,7 @@ import {
           },
         }}
       >
-        {/* =========================
-            POST HEADER
-        ========================= */}
+        
   
         <Box
           sx={{
@@ -232,7 +278,7 @@ import {
                 </Typography>
   
                 <Typography variant="caption" color="text.secondary">
-                  •
+                  
                 </Typography>
   
                 <PublicRoundedIcon
@@ -244,20 +290,54 @@ import {
               </Box>
             </Box>
   
-            <IconButton
-              sx={{
-                "&:hover": {
-                  bgcolor: "rgba(15,23,42,.05)",
-                },
-              }}
-            >
-              <MoreHorizRoundedIcon />
-            </IconButton>
+<IconButton
+  onClick={(event) => {
+    setMenuAnchor(event.currentTarget);
+  }}
+  sx={{
+    "&:hover": {
+      bgcolor: "rgba(15,23,42,.05)",
+    },
+  }}
+>
+  <MoreHorizRoundedIcon />
+</IconButton>
+
+<Menu
+  anchorEl={menuAnchor}
+  open={Boolean(menuAnchor)}
+  onClose={() => setMenuAnchor(null)}
+>
+  <MenuItem
+    onClick={() => {
+      setMenuAnchor(null);
+      setEditContent(post.content || "");
+      setEditOpen(true);
+    }}
+  >
+    Edit
+  </MenuItem>
+
+  <MenuItem
+    onClick={() => {
+      setMenuAnchor(null);
+
+      const confirmed = window.confirm(
+        "Bu postu silmək istəyirsən?"
+      );
+
+      if (confirmed) {
+        deleteMutation.mutate();
+      }
+    }}
+    disabled={deleteMutation.isPending}
+  >
+    Delete
+  </MenuItem>
+</Menu>
           </Box>
   
-          {/* =========================
-              TEXT
-          ========================= */}
+          
   
           {post.content && (
             <Typography
@@ -280,9 +360,7 @@ import {
           )}
         </Box>
   
-        {/* =========================
-            IMAGE
-        ========================= */}
+
   
         {imageUrl && (
           <Box
@@ -321,9 +399,7 @@ import {
           </Box>
         )}
   
-        {/* =========================
-            VIDEO
-        ========================= */}
+        
   
         {videoUrl && (
           <Box
@@ -362,9 +438,7 @@ import {
           </Box>
         )}
   
-        {/* =========================
-            COUNTS
-        ========================= */}
+        
   
         <Box
           sx={{
@@ -463,10 +537,7 @@ import {
               mt: 0.8,
             }}
           />
-  
-          {/* =========================
-              ACTIONS
-          ========================= */}
+
   
           <Box
             sx={{
@@ -479,7 +550,7 @@ import {
               gap: 0.5,
             }}
           >
-            {/* LIKE */}
+
   
             <Box
               onClick={handleLike}
@@ -541,7 +612,7 @@ import {
               </Typography>
             </Box>
   
-            {/* COMMENT */}
+         
   
             <Box
               sx={{
@@ -593,7 +664,7 @@ import {
               </Typography>
             </Box>
   
-            {/* SHARE */}
+
   
             <Box
               sx={{
@@ -651,5 +722,50 @@ import {
           </>
         )}
       </Paper>
-    );
-  }
+
+      <Dialog
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Edit Post</DialogTitle>
+
+        <DialogContent>
+          <TextField
+            autoFocus
+            fullWidth
+            multiline
+            minRows={4}
+            value={editContent}
+            onChange={(event) => {
+              setEditContent(event.target.value);
+            }}
+            sx={{
+              mt: 1,
+            }}
+          />
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setEditOpen(false)}>
+            Cancel
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={() => {
+              updateMutation.mutate();
+            }}
+            disabled={
+              updateMutation.isPending ||
+              !editContent.trim()
+            }
+          >
+            {updateMutation.isPending ? "Saving..." : "Save"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
+  );
+}

@@ -45,7 +45,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IAuthHelper, AuthHelper>();
-builder.Services.AddScoped<IFileStorageService, CloudinaryStorageService>();
+builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
 
 builder.Services.AddScoped<INotificationService, NotificationService>();
 
